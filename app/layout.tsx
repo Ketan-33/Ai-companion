@@ -9,7 +9,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body>
           <ThemeProvider
             attribute="class"
-            forcedTheme="dark"
+            defaultTheme="dark"
             enableSystem
             disableTransitionOnChange>
           {children}
