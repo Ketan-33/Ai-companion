@@ -1,12 +1,20 @@
-import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body>
-          <main>{children}</main>
+          <ThemeProvider
+            attribute="class"
+            forcedTheme="dark"
+            enableSystem
+            disableTransitionOnChange>
+          {children}
+          </ThemeProvider>
+          
         </body>
       </html>
     </ClerkProvider>
