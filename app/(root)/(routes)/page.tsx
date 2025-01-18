@@ -1,9 +1,9 @@
-import { UserButton } from "@clerk/nextjs";
+import { SearchInput } from "@/components/search-input";
 
 const Page = () => {
   return (
-    <div>
-      <h1>Home Page (Procected)</h1>
+    <div className="h-full p-4 space-y-2">
+      <SearchInput/>
     </div>
   );
 };
