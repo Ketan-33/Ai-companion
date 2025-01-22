@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 
 import prismadb from "@/lib/prismadb";
-import { checkSubscription } from "@/lib/subscription";
 import { currentUser } from "@clerk/nextjs/server";
 
 export async function PATCH(
@@ -51,3 +50,39 @@ export async function PATCH(
     return new NextResponse("Internal Error !!", { status: 500 });
   }
 };
+
+
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { companionId: string } }
+) {
+  try {
+    const user = await currentUser();
+
+    if (!user || !user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    if (!params.companionId) {
+      return new NextResponse("CompanionId is required", { status: 400 });
+    }
+
+    const existingCompanion = await prismadb.companion.findUnique({
+      where: { id: params.companionId },
+    });
+
+    if (!existingCompanion || existingCompanion.userId !== user.id) {
+      return new NextResponse("Companion not found or access denied", { status: 404 });
+    }
+
+    await prismadb.companion.delete({
+      where: { id: params.companionId },
+    });
+
+    return new NextResponse("Companion deleted successfully", { status: 200 });
+  } catch (error) {
+    console.error("[COMPANION_DELETE_ERROR]", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
+  }
+}
