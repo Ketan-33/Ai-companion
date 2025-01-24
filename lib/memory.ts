@@ -1,7 +1,7 @@
 import { Redis } from "@upstash/redis";
-import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { PineconeClient } from "@pinecone-database/pinecone";
-import { PineconeStore } from "langchain/vectorstores/pinecone";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { Pinecone } from "@pinecone-database/pinecone";
+import { PineconeStore } from "@langchain/pinecone";
 
 export type CompanionKey = {
   companionName: string;
@@ -10,38 +10,36 @@ export type CompanionKey = {
 };
 
 export class MemoryManager {
-  private static instance: MemoryManager;
   private history: Redis;
-  private vectorDBClient: PineconeClient;
+  private vectorDBClient: Pinecone;
+  private static instance: MemoryManager;
 
   public constructor() {
     this.history = Redis.fromEnv();
-    this.vectorDBClient = new PineconeClient();
+    const pineconeEnv = process.env.PINECONE_ENVIRONMENT || "";
+    this.vectorDBClient = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY || "",
+      controllerHostUrl: `https://controller.${pineconeEnv}.pinecone.io`
+    });
   }
 
   public async init() {
-    if (this.vectorDBClient instanceof PineconeClient) {
-      await this.vectorDBClient.init({
-        apiKey: process.env.PINECONE_API_KEY!,
-        environment: process.env.PINECONE_ENVIRONMENT!,
-      });
-    }
+    // If you need any async initialization, put it here
+    return Promise.resolve();
   }
 
   public async vectorSearch(
     recentChatHistory: string,
     companionFileName: string
   ) {
-    const pineconeClient = <PineconeClient>this.vectorDBClient;
-
-    const pineconeIndex = pineconeClient.Index(
-      process.env.PINECONE_INDEX! || ""
+    const pineconeIndex = this.vectorDBClient.Index(
+      process.env.PINECONE_INDEX || ""
     );
 
     const vectorStore = await PineconeStore.fromExistingIndex(
       new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY }),
       { pineconeIndex }
-    ); 
+    );
 
     const similarDocs = await vectorStore
       .similaritySearch(recentChatHistory, 3, { fileName: companionFileName })
@@ -95,7 +93,7 @@ export class MemoryManager {
   }
 
   public async seedChatHistory(
-    seedContent: String,
+    seedContent: string,
     delimiter: string = "\n",
     companionKey: CompanionKey
   ) {
