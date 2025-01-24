@@ -25,6 +25,18 @@ export const ChatMessage = ({
 }: ChatMessageProps) => {
   const { toast } = useToast();
   const { theme } = useTheme();
+  
+  const onCopy = () => {
+    if (!content) {
+      return;
+    }
+
+    navigator.clipboard.writeText(content);
+    toast({
+      description: "Message copied to clipboard.",
+      duration: 3000,
+    })
+  }
 
   return (
     <div className={cn(
@@ -39,7 +51,16 @@ export const ChatMessage = ({
         }
       </div>
       {role === "user" && <UserAvatar />}
-
+      {role !== "user" && !isLoading && (
+        <Button 
+          onClick={onCopy} 
+          className="opacity-0 group-hover:opacity-100 transition" 
+          size="icon"
+          variant="ghost"
+        >
+          <Copy className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   )
 }
