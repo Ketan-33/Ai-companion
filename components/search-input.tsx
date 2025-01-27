@@ -1,50 +1,51 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { Input } from "./ui/input";
+import qs from "query-string";
 import { ChangeEventHandler, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Search } from "lucide-react";
+
+import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
-import { Questrial } from "next/font/google";
-import qs from "query-string";
 
 export const SearchInput = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-    const router = useRouter();
-    const serchParams = useSearchParams();
+  const categoryId = searchParams.get("categoryId");
+  const name = searchParams.get("name");
 
-    const categoryId = serchParams.get("category");
-    const name= serchParams.get("name");
+  const [value, setValue] = useState(name || "");
+  const debouncedValue = useDebounce<string>(value, 500);
 
-    const [value, setValue] = useState(name || "");
-    const debouncedValue = useDebounce<string>(value,500);
 
-    const onChange: ChangeEventHandler<HTMLInputElement> = (e) => {
-        setValue(e.target.value);
-    }
+  const onChange: ChangeEventHandler<HTMLInputElement> = (e) => {
+    setValue(e.target.value);
+  };
 
-    useEffect(() => {
-        const query = {
-            name: debouncedValue || undefined,
-            categoryId: categoryId || undefined,
-        }
-        const url = qs.stringifyUrl({
-            url: window.location.href,
-            query,
-        },{skipEmptyString: true, skipNull: true});
+  useEffect(() => {
+    const query = { 
+      name: debouncedValue, 
+      categoryId: categoryId,
+    };
 
-        router.push(url);
-    },[debouncedValue, router, categoryId]);
+    const url = qs.stringifyUrl({
+      url: window.location.href,
+      query
+    }, { skipNull: true, skipEmptyString: true });
 
-    return(
-        <div className="relative">
-            <Search className="absolute h-4 w-4 top-3 left-4 text-muted-foreground"/>
-            <Input
-            onChange= {onChange}
-            value={value}
-            placeholder="Search..."
-            className="pl-10 bg-primary/10"
-            />
-        </div>
-    )
-}
+    router.push(url);
+  }, [debouncedValue, router, categoryId])
+
+  return (
+    <div className="relative">
+      <Search className="absolute h-4 w-4 top-3 left-4 text-muted-foreground" />
+      <Input
+        onChange={onChange}
+        value={value}
+        placeholder="Search..."
+        className="pl-10 bg-primary/10"
+      />
+    </div>
+  )
+};

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { BotAvatar } from "@/components/bot-avatar"
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 
 export interface ChatMessageProps {
   role: "system" | "user",
