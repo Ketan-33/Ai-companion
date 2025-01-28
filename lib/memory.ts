@@ -1,7 +1,7 @@
 import { Redis } from "@upstash/redis";
-import { OpenAIEmbeddings } from "@langchain/openai";
 import { Pinecone } from "@pinecone-database/pinecone";
-import { PineconeStore } from "@langchain/pinecone";
+import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+import { PineconeStore } from "langchain/vectorstores/pinecone";
 
 export type CompanionKey = {
   companionName: string;
@@ -10,42 +10,40 @@ export type CompanionKey = {
 };
 
 export class MemoryManager {
+  private static instance: MemoryManager;
   private history: Redis;
   private vectorDBClient: Pinecone;
-  private static instance: MemoryManager;
 
   public constructor() {
     this.history = Redis.fromEnv();
-    const pineconeEnv = process.env.PINECONE_ENVIRONMENT || "";
+    // Initialize Pinecone without 'new'
     this.vectorDBClient = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY || "",
-      controllerHostUrl: `https://controller.${pineconeEnv}.pinecone.io`
+      apiKey: process.env.PINECONE_API_KEY!,
+      controllerHostUrl: process.env.PINECONE_HOST_URL!
     });
   }
 
   public async init() {
-    // If you need any async initialization, put it here
-    return Promise.resolve();
+    // Remove the initialization here since we're doing it in the constructor
   }
 
   public async vectorSearch(
-    recentChatHistory: string,
-    companionFileName: string
+      recentChatHistory: string,
+      companionFileName: string
   ) {
-    const pineconeIndex = this.vectorDBClient.Index(
-      process.env.PINECONE_INDEX || ""
-    );
+    // Get the index directly from the client
+    const pineconeIndex = this.vectorDBClient.Index('companion');
 
     const vectorStore = await PineconeStore.fromExistingIndex(
-      new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY }),
-      { pineconeIndex }
+        new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY }),
+        { pineconeIndex }
     );
 
     const similarDocs = await vectorStore
-      .similaritySearch(recentChatHistory, 3, { fileName: companionFileName })
-      .catch((err) => {
-        console.log("WARNING: failed to get vector search results.", err);
-      });
+        .similaritySearch(recentChatHistory, 3, { fileName: companionFileName })
+        .catch((err) => {
+          console.log("WARNING: failed to get vector search results.", err);
+        });
     return similarDocs;
   }
 
@@ -93,9 +91,9 @@ export class MemoryManager {
   }
 
   public async seedChatHistory(
-    seedContent: string,
-    delimiter: string = "\n",
-    companionKey: CompanionKey
+      seedContent: String,
+      delimiter: string = "\n",
+      companionKey: CompanionKey
   ) {
     const key = this.generateRedisCompanionKey(companionKey);
     if (await this.history.exists(key)) {
