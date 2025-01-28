@@ -35,7 +35,7 @@ export class MemoryManager {
     const pineconeIndex = this.vectorDBClient.Index('companion');
 
     const vectorStore = await PineconeStore.fromExistingIndex(
-        new OpenAIEmbeddings({ openAIApiKey: process.env.GITHUB_TOKEN }),
+        new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY! }),
         { pineconeIndex }
     );
 
