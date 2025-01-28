@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
-import { StreamingTextResponse, LangChainStream } from "ai";
+import { Readable } from "stream";
+import { StreamingTextResponse } from "ai";
 import { currentUser } from "@clerk/nextjs";
-import { Replicate } from "langchain/llms/replicate";
-import { CallbackManager } from "langchain/callbacks";
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 import { MemoryManager } from "@/lib/memory";
@@ -16,20 +16,15 @@ export async function POST(
     { params }: { params: { chatId: string } }
 ) {
   try {
-    // console.log("Received POST request");
     const { prompt } = await request.json();
-    // console.log("Prompt received:", prompt);
     const user = await currentUser();
-    // console.log("Current user:", user);
 
     if (!user || !user.firstName || !user.id) {
-      // console.log("Unauthorized access attempt");
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
     const identifier = request.url + "-" + user.id;
     const { success } = await rateLimit(identifier);
-    // console.log("Rate limit check:", success);
 
     if (!success) {
       return new NextResponse("Rate limit exceeded", { status: 429 });
@@ -37,7 +32,7 @@ export async function POST(
 
     const companion = await prismadb.companion.update({
       where: {
-        id: params.chatId
+        id: params.chatId,
       },
       data: {
         messages: {
@@ -47,108 +42,83 @@ export async function POST(
             userId: user.id,
           },
         },
-      }
+      },
     });
-    // console.log("Companion updated:", companion);
 
     if (!companion) {
       return new NextResponse("Companion not found", { status: 404 });
     }
 
-    const name = companion.id;
-    const companion_file_name = name + ".txt";
-
     const companionKey = {
-      companionName: name!,
+      companionName: companion.id,
       userId: user.id,
-      modelName: "llama2-13b",
+      modelName: "gpt-4o",
     };
     const memoryManager = await MemoryManager.getInstance();
 
     const records = await memoryManager.readLatestHistory(companionKey);
-    // console.log("Latest history records:", records);
     if (records.length === 0) {
       await memoryManager.seedChatHistory(companion.seed, "\n\n", companionKey);
     }
     await memoryManager.writeToHistory("User: " + prompt + "\n", companionKey);
 
-    // Query Pinecone
-
     const recentChatHistory = await memoryManager.readLatestHistory(companionKey);
-    // console.log("Recent chat history:", recentChatHistory);
 
     const similarDocs = await memoryManager.vectorSearch(
         recentChatHistory,
-        companion_file_name
+        `${companion.id}.txt`
     );
-    // console.log("Similar documents:", similarDocs);
 
     let relevantHistory = "";
-    if (!!similarDocs && similarDocs.length !== 0) {
+    if (similarDocs && similarDocs.length !== 0) {
       relevantHistory = similarDocs.map((doc) => doc.pageContent).join("\n");
     }
-    const { handlers } = LangChainStream();
-    // Call Replicate for inference
-    const model = new Replicate({
-      model: "meta/meta-llama-3-8b:instruct",
-      input: {
-        max_length: 2048,
-      },
-      apiKey: process.env.REPLICATE_API_TOKEN,
-      callbackManager: CallbackManager.fromHandlers(handlers),
+
+    const client = new OpenAI({
+      baseURL: "https://models.inference.ai.azure.com",
+      apiKey: process.env["GITHUB_TOKEN"],
     });
 
-    // Turn verbose on for debugging
-    model.verbose = true;
+    const stream = await client.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: companion.instructions || "You are a helpful assistant." },
+        { role: "system", content: `Relevant details about ${companion.name}'s past:\n${relevantHistory}` },
+        { role: "user", content: `${recentChatHistory}\n${prompt}` },
+      ],
+      stream: true,
+    });
 
-    const resp = String(
-        await model
-            .call(
-                `
-        ONLY generate plain sentences without prefix of who is speaking. DO NOT use ${companion.name}: prefix.
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      start(controller) {
+        (async () => {
+          for await (const part of stream) {
+            const content = part.choices[0]?.delta?.content || "";
+            controller.enqueue(encoder.encode(content));
+            await memoryManager.writeToHistory(content, companionKey);
+          }
+          controller.close();
+        })();
+      },
+    });
 
-        ${companion.instructions}
-
-        Below are relevant details about ${companion.name}'s past and the conversation you are in.
-        ${relevantHistory}
-
-
-        ${recentChatHistory}\n${companion.name}:`
-            )
-            .catch(console.error)
-    );
-    console.log("Model response:", resp);
-
-    const cleaned = resp.replaceAll(",", "");
-    const chunks = cleaned.split("\n");
-    const response = chunks[0];
-
-    await memoryManager.writeToHistory("" + response.trim(), companionKey);
-    var Readable = require("stream").Readable;
-
-    let s = new Readable();
-    s.push(response);
-    s.push(null);
-    if (response.length > 1) {
-      memoryManager.writeToHistory("" + response.trim(), companionKey);
-
-      await prismadb.companion.update({
-        where: {
-          id: params.chatId
-        },
-        data: {
-          messages: {
-            create: {
-              content: response.trim(),
-              role: "system",
-              userId: user.id,
-            },
+    await prismadb.companion.update({
+      where: {
+        id: params.chatId,
+      },
+      data: {
+        messages: {
+          create: {
+            content: prompt,
+            role: "user",
+            userId: user.id,
           },
-        }
-      });
-    }
+        },
+      },
+    });
 
-    return new StreamingTextResponse(s);
+    return new StreamingTextResponse(readableStream);
   } catch (error) {
     console.error("Error in POST request:", error);
     return new NextResponse("Internal Error", { status: 500 });
