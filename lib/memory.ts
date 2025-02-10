@@ -1,7 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { Pinecone } from "@pinecone-database/pinecone";
-import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { PineconeStore } from "langchain/vectorstores/pinecone";
+import prismadb from "@/lib/prismadb";
 
 export type CompanionKey = {
   companionName: string;
@@ -12,45 +10,14 @@ export type CompanionKey = {
 export class MemoryManager {
   private static instance: MemoryManager;
   private history: Redis;
-  private vectorDBClient: Pinecone;
 
   public constructor() {
     this.history = Redis.fromEnv();
-    // Initialize Pinecone without 'new'
-    this.vectorDBClient = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY!,
-      controllerHostUrl: process.env.PINECONE_HOST_URL!
-    });
-  }
-
-  public async init() {
-    // Remove the initialization here since we're doing it in the constructor
-  }
-
-  public async vectorSearch(
-      recentChatHistory: string,
-      companionFileName: string
-  ) {
-    // Get the index directly from the client
-    const pineconeIndex = this.vectorDBClient.Index('companion');
-
-    const vectorStore = await PineconeStore.fromExistingIndex(
-        new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY! }),
-        { pineconeIndex }
-    );
-
-    const similarDocs = await vectorStore
-        .similaritySearch(recentChatHistory, 3, { fileName: companionFileName })
-        .catch((err) => {
-          console.log("WARNING: failed to get vector search results.", err);
-        });
-    return similarDocs;
   }
 
   public static async getInstance(): Promise<MemoryManager> {
     if (!MemoryManager.instance) {
       MemoryManager.instance = new MemoryManager();
-      await MemoryManager.instance.init();
     }
     return MemoryManager.instance;
   }
@@ -106,6 +73,32 @@ export class MemoryManager {
     for (const line of content) {
       await this.history.zadd(key, { score: counter, member: line });
       counter += 1;
+    }
+  }
+
+  public async vectorSearch(
+      recentChatHistory: string,
+      companionFileName: string
+  ) {
+    try {
+      const embeddings = await prismadb.embedding.findMany({
+        where: {
+          fileName: companionFileName,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 3,
+      });
+
+      if (!embeddings) {
+        throw new Error("No embeddings found");
+      }
+
+      return embeddings;
+    } catch (error) {
+      console.error("Error in vectorSearch:", error);
+      return [];
     }
   }
 }

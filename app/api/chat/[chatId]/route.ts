@@ -43,6 +43,9 @@ export async function POST(
           },
         },
       },
+      include: {
+        messages: true,
+      },
     });
 
     if (!companion) {
@@ -79,46 +82,49 @@ export async function POST(
       apiKey: process.env["GITHUB_TOKEN"],
     });
 
-    const stream = await client.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: companion.instructions || "You are a helpful assistant." },
-        { role: "system", content: `Relevant details about ${companion.name}'s past:\n${relevantHistory}` },
-        { role: "user", content: `${recentChatHistory}\n${prompt}` },
-      ],
-      stream: true,
-    });
+    try {
+      const stream = await client.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: companion.instructions || "You are a helpful assistant." },
+          { role: "system", content: `Relevant details about ${companion.name}'s past:\n${relevantHistory}` },
+          { role: "user", content: `${recentChatHistory}\n${prompt}` },
+        ],
+        stream: true,
+      });
 
-    const encoder = new TextEncoder();
-    const readableStream = new ReadableStream({
-      start(controller) {
-        (async () => {
-          for await (const part of stream) {
-            const content = part.choices[0]?.delta?.content || "";
-            controller.enqueue(encoder.encode(content));
-            await memoryManager.writeToHistory(content, companionKey);
-          }
-          controller.close();
-        })();
-      },
-    });
+      const encoder = new TextEncoder();
+      const readableStream = new ReadableStream({
+        start(controller) {
+          let fullMessage = "";
+          (async () => {
+            for await (const part of stream) {
+              const content = part.choices[0]?.delta?.content || "";
+              controller.enqueue(encoder.encode(content));
+              fullMessage += content;
+            }
+            await memoryManager.writeToHistory(fullMessage, companionKey);
 
-    await prismadb.companion.update({
-      where: {
-        id: params.chatId,
-      },
-      data: {
-        messages: {
-          create: {
-            content: prompt,
-            role: "user",
-            userId: user.id,
-          },
+            // Store system messages in the database
+            await prismadb.message.create({
+              data: {
+                content: fullMessage,
+                role: "system",
+                userId: user.id,
+                companionId: companion.id,
+              },
+            });
+            controller.close();
+          })();
         },
-      },
-    });
+      });
 
-    return new StreamingTextResponse(readableStream);
+      return new StreamingTextResponse(readableStream);
+    } catch (error) {
+      console.error("Error in POST request:", error);
+      // Return a generic error message to avoid exposing sensitive details
+      return new NextResponse("An error occurred while processing your request.", { status: 500 });
+    }
   } catch (error) {
     console.error("Error in POST request:", error);
     return new NextResponse("Internal Error", { status: 500 });

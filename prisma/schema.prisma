@@ -41,16 +41,16 @@ enum Role {
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  role      Role
-  content   String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  role        Role
+  content     String   @db.Text // Ensure this field can store the entire message
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   companionId String
   userId      String
 
-  companion Companion @relation(fields: [companionId], references: [id], onDelete: Cascade)
+  companion   Companion @relation(fields: [companionId], references: [id], onDelete: Cascade)
 
   @@index([companionId])
 }
@@ -62,4 +62,11 @@ model UserSubscription {
   stripeSubscriptionId   String?   @unique @map(name: "stripe_subscription_id")
   stripePriceId          String?   @map(name: "stripe_price_id")
   stripeCurrentPeriodEnd DateTime? @map(name: "stripe_current_period_end")
+}
+
+model Embedding {
+  id        String   @id @default(uuid())
+  fileName  String
+  pageContent String
+  createdAt DateTime @default(now())
 }
