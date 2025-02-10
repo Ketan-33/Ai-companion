@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  runtime: 'nodejs',
   experimental: {
-    serverActions: true
+    serverActions: false
   },
   images: {
     domains: [
