@@ -64,10 +64,12 @@ node scripts/seed.ts
 npm run dev
 ```
 
-## Available commands
+### Testing Subscriptions
 
-Running commands with npm `npm run [command]`
+To test the subscription functionality, use Stripe's test card details:
 
-| command         | description                              |
-| :-------------- | :--------------------------------------- |
-| `dev`           | Starts a development instance of the app |
+- Card number: `4242 4242 4242 4242`
+- Expiry date: Any future date
+- CVC: Any 3 digits
+- ZIP: Any 5 digits
+
