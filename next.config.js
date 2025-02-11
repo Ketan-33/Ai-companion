@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  runtime: 'nodejs',
   experimental: {
     serverActions: false
   },
